@@ -117,6 +117,13 @@ async function fetchFullConversations(orgId, convList, onProgress, settings) {
           const res = await fetch(
             `/api/organizations/${orgId}/chat_conversations/${conv.uuid}`
           );
+          if (res.status === 429) {
+            console.log(`[ClaudeExporter] 429 rate limit — stopping`);
+            _cancelled = true;
+            completed++;
+            onProgress({ current: completed, total: convList.length, title: conv.name || conv.uuid });
+            return conv;
+          }
           completed++;
           onProgress({ current: completed, total: convList.length, title: conv.name || conv.uuid });
           return res.ok ? await res.json() : conv;

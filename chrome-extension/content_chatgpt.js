@@ -180,28 +180,24 @@ function resolveSettings(settings) {
   };
 }
 
-async function fetchOneConversation(item, token, retryDelay = DEFAULTS.retryDelay, retries = 3) {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const res = await fetch(`/backend-api/conversation/${item.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 429) {
-        const wait = retryDelay * (attempt + 1);
-        console.log(`[GPTExporter] 429 rate limit, waiting ${wait}ms...`);
-        await new Promise((r) => setTimeout(r, wait));
-        continue;
-      }
-      return res.ok ? await res.json() : item;
-    } catch {
-      // fall through to return item
+async function fetchOneConversation(item, token) {
+  try {
+    const res = await fetch(`/backend-api/conversation/${item.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 429) {
+      console.log(`[GPTExporter] 429 rate limit — stopping`);
+      _cancelled = true;
+      return item;
     }
+    return res.ok ? await res.json() : item;
+  } catch {
+    return item;
   }
-  return item;
 }
 
 async function fetchFullConversations(convList, token, onProgress, settings) {
-  const { concurrency, chunkDelay, retryDelay } = resolveSettings(settings);
+  const { concurrency, chunkDelay } = resolveSettings(settings);
   const full = [];
   let completed = 0;
 
@@ -210,7 +206,7 @@ async function fetchFullConversations(convList, token, onProgress, settings) {
     const chunk = convList.slice(i, i + concurrency);
     const results = await Promise.all(
       chunk.map(async (item) => {
-        const conv = await fetchOneConversation(item, token, retryDelay);
+        const conv = await fetchOneConversation(item, token);
         completed++;
         onProgress({ current: completed, total: convList.length, title: item.title || item.id });
         return normalizeConversation(item, conv);

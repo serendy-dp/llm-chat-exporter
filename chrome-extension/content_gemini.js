@@ -211,6 +211,10 @@ async function callBatchExecute(rpcid, payload, tokens, sourcePath) {
     }
   );
 
+  if (res.status === 429) {
+    console.log(`[GeminiExporter] 429 rate limit — stopping`);
+    _cancelled = true;
+  }
   if (!res.ok) throw new Error(`batchexecute ${rpcid} エラー (${res.status})`);
   const text = await res.text();
   console.log(`[GeminiExporter] ${rpcid} raw response (2000 chars):\n${text.slice(0, 2000)}`);
