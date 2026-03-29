@@ -202,20 +202,21 @@ async function fetchOneConversation(item, token, retryDelay = DEFAULTS.retryDela
 
 async function fetchFullConversations(convList, token, onProgress, settings) {
   const { concurrency, chunkDelay, retryDelay } = resolveSettings(settings);
-  const full = new Array(convList.length);
+  const full = [];
   let completed = 0;
 
   for (let i = 0; i < convList.length; i += concurrency) {
     if (_cancelled) break;
     const chunk = convList.slice(i, i + concurrency);
-    await Promise.all(
-      chunk.map(async (item, j) => {
+    const results = await Promise.all(
+      chunk.map(async (item) => {
         const conv = await fetchOneConversation(item, token, retryDelay);
-        full[i + j] = normalizeConversation(item, conv);
         completed++;
         onProgress({ current: completed, total: convList.length, title: item.title || item.id });
+        return normalizeConversation(item, conv);
       })
     );
+    full.push(...results);
     if (i + concurrency < convList.length) {
       await new Promise((r) => setTimeout(r, chunkDelay));
     }
@@ -250,6 +251,8 @@ async function smartSync(onProgress, settings, limit = 0, since = null) {
   if (needUpdate.length === 0) return { total: convList.length, updated: 0 };
 
   const fullConvs = await fetchFullConversations(needUpdate, token, onProgress, settings);
+
+  if (fullConvs.length === 0) return { total: convList.length, updated: 0 };
 
   const upsertRes = await fetch(`${SYNC_SERVER}/upsert`, {
     method: "POST",
