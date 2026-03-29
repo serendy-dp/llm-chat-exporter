@@ -313,6 +313,45 @@
     }
     .cfg-warn.visible { display: block; }
 
+    /* トグルスイッチ (Auto Sync) */
+    .latent-toggle {
+      position: relative;
+      display: inline-block;
+      width: 28px;
+      height: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .latent-toggle input { display: none; }
+    .latent-track {
+      position: absolute;
+      inset: 0;
+      background: #0d1a2a;
+      border: 1px solid #1a3a55;
+      border-radius: 7px;
+      transition: all 0.2s;
+    }
+    .latent-toggle input:checked + .latent-track {
+      border-color: #00ff88;
+      background: #00ff8822;
+    }
+    .latent-track::after {
+      content: '';
+      position: absolute;
+      left: 1px;
+      top: 1px;
+      width: 10px;
+      height: 10px;
+      background: #335577;
+      border-radius: 50%;
+      transition: all 0.2s;
+    }
+    .latent-toggle input:checked + .latent-track::after {
+      left: 15px;
+      background: #00ff88;
+      box-shadow: 0 0 4px #00ff8888;
+    }
+
     /* ノート */
     #note {
       font-size: 9px;
@@ -415,14 +454,18 @@
 
     <div class="cfg-row">
       <div class="cfg-label">
-        <span class="cfg-name">Retry Delay</span>
-        <span class="cfg-rec">推奨: 3000–10000 ms</span>
+        <span class="cfg-name">Auto Sync</span>
+        <label class="latent-toggle">
+          <input type="checkbox" id="latentEnabled" />
+          <span class="latent-track"></span>
+        </label>
       </div>
-      <div class="cfg-input-wrap">
-        <input class="cfg-input" type="number" id="cfgRetryDelay" min="500" max="60000" step="500" value="5000" />
-        <span class="cfg-unit">ms / retry</span>
+      <div id="latentIntervalWrap" style="display:none; margin-top:6px">
+        <div class="cfg-input-wrap">
+          <input class="cfg-input" type="number" id="latentInterval" min="1" max="1440" value="30" />
+          <span class="cfg-unit">min / cycle</span>
+        </div>
       </div>
-      <div class="cfg-warn" id="warnRetryDelay">⚠ 1000ms未満では 429 から回復できない可能性があります</div>
     </div>
   </div>
 

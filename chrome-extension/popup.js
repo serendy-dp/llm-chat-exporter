@@ -5,10 +5,11 @@ const btnConfig   = document.getElementById("btnConfig");
 const configPanel = document.getElementById("configPanel");
 const cfgConcurrency = document.getElementById("cfgConcurrency");
 const cfgChunkDelay  = document.getElementById("cfgChunkDelay");
-const cfgRetryDelay  = document.getElementById("cfgRetryDelay");
 const warnConcurrency = document.getElementById("warnConcurrency");
 const warnChunkDelay  = document.getElementById("warnChunkDelay");
-const warnRetryDelay  = document.getElementById("warnRetryDelay");
+const latentEnabled      = document.getElementById("latentEnabled");
+const latentInterval     = document.getElementById("latentInterval");
+const latentIntervalWrap = document.getElementById("latentIntervalWrap");
 const fmtJson    = document.getElementById("fmtJson");
 const fmtMd      = document.getElementById("fmtMd");
 const limitAll   = document.getElementById("limitAll");
@@ -23,6 +24,7 @@ const serviceIndicator = document.getElementById("serviceIndicator");
 
 let selectedFormat = "json";
 let rangeMode = "all"; // "all" | "latest" | "since"
+let _syncActive = false; // PROGRESS が最終ステータスを上書きするのを防ぐ
 
 // デフォルトの日付を今日から30日前に設定
 const d = new Date();
@@ -57,13 +59,12 @@ limitSince.addEventListener("click", () => setRangeMode("since"));
 
 // ── 設定パネル ──────────────────────────────────────────
 
-const DEFAULTS = { concurrency: 2, chunkDelay: 2000, retryDelay: 5000 };
+const DEFAULTS = { concurrency: 2, chunkDelay: 2000 };
 
 function getSettings() {
   return {
     concurrency: parseInt(cfgConcurrency.value, 10) || DEFAULTS.concurrency,
     chunkDelay:  parseInt(cfgChunkDelay.value,  10) || DEFAULTS.chunkDelay,
-    retryDelay:  parseInt(cfgRetryDelay.value,  10) || DEFAULTS.retryDelay,
   };
 }
 
@@ -71,11 +72,10 @@ function validateSettings() {
   const s = getSettings();
   warnConcurrency.classList.toggle("visible", s.concurrency >= 4);
   warnChunkDelay.classList.toggle("visible",  s.chunkDelay < 500);
-  warnRetryDelay.classList.toggle("visible",  s.retryDelay < 1000);
   chrome.storage.local.set({ llmExporterSettings: s });
 }
 
-[cfgConcurrency, cfgChunkDelay, cfgRetryDelay].forEach(el => {
+[cfgConcurrency, cfgChunkDelay].forEach(el => {
   el.addEventListener("input", validateSettings);
 });
 
@@ -85,13 +85,35 @@ btnConfig.addEventListener("click", () => {
 });
 
 // 保存済み設定をロード
-chrome.storage.local.get("llmExporterSettings", ({ llmExporterSettings: s }) => {
-  if (!s) return;
-  cfgConcurrency.value = s.concurrency ?? DEFAULTS.concurrency;
-  cfgChunkDelay.value  = s.chunkDelay  ?? DEFAULTS.chunkDelay;
-  cfgRetryDelay.value  = s.retryDelay  ?? DEFAULTS.retryDelay;
-  validateSettings();
+chrome.storage.local.get(
+  ["llmExporterSettings", "latentSyncEnabled", "latentSyncInterval"],
+  ({ llmExporterSettings: s, latentSyncEnabled, latentSyncInterval }) => {
+    if (s) {
+      cfgConcurrency.value = s.concurrency ?? DEFAULTS.concurrency;
+      cfgChunkDelay.value  = s.chunkDelay  ?? DEFAULTS.chunkDelay;
+      validateSettings();
+    }
+    if (latentSyncEnabled) {
+      latentEnabled.checked = true;
+      latentIntervalWrap.style.display = "block";
+    }
+    if (latentSyncInterval) latentInterval.value = latentSyncInterval;
+  }
+);
+
+// Auto Sync トグル
+latentEnabled.addEventListener("change", () => {
+  latentIntervalWrap.style.display = latentEnabled.checked ? "block" : "none";
+  saveLatentSettings();
 });
+latentInterval.addEventListener("input", saveLatentSettings);
+
+function saveLatentSettings() {
+  chrome.storage.local.set({
+    latentSyncEnabled:  latentEnabled.checked,
+    latentSyncInterval: parseInt(latentInterval.value, 10) || 30,
+  });
+}
 
 function getRangeParams() {
   if (rangeMode === "latest") {
@@ -168,7 +190,7 @@ function setButtons(disabled) {
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === "PROGRESS") {
+  if (msg.type === "PROGRESS" && _syncActive) {
     const pct = Math.round((msg.current / msg.total) * 100);
     setStatus(`${msg.current}/${msg.total}  ${msg.title || ""}`.slice(0, 60));
     setProgress(pct);
@@ -226,6 +248,7 @@ async function runSmartSync() {
 }
 
 async function runExport() {
+  _syncActive = true;
   setButtons(true);
   setProgress(0);
   setStatus("fetching conversations...");
@@ -233,9 +256,11 @@ async function runExport() {
 
   try {
     const count = await fetchConversations(selectedFormat);
+    _syncActive = false;
     setProgress(100);
     setStatus(`exported ${count} conversations`, "done");
   } catch (e) {
+    _syncActive = false;
     setStatus(e.message, "error");
   } finally {
     setButtons(false);
@@ -247,6 +272,7 @@ async function runExport() {
 }
 
 async function runSync() {
+  _syncActive = true;
   setButtons(true);
   setProgress(0);
   setStatus("syncing...");
@@ -254,9 +280,11 @@ async function runSync() {
 
   try {
     const result = await runSmartSync();
+    _syncActive = false;
     setProgress(100);
     setStatus(`synced ${result.updated} / ${result.total}`, "done");
   } catch (e) {
+    _syncActive = false;
     setStatus(e.message, "error");
   } finally {
     setButtons(false);
