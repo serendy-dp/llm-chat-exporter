@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# DB・データファイル（個人データを含む）
+server/chat_history.db
+server/*.db
+*.db
+*.sqlite
+*.sqlite3
+
+# エクスポートデータ（個人の会話履歴）
+*_export_*.json
+*_export_*.md
+conversations.json
+
+# 環境変数・シークレット
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Claude Code
+.claude/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Node.js（将来の拡張用）
+node_modules/
