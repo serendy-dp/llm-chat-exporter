@@ -19,18 +19,41 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
   }
 
   if (req.type === "SMART_SYNC") {
+    if (_running) {
+      sendResponse({ ok: false, error: "同期が既に実行中です" });
+      return;
+    }
+    _running = true;
+    _cancelled = false;
+    _progress = null;
     smartSync((progress) => {
+      _progress = progress;
       chrome.runtime.sendMessage({ type: "PROGRESS", ...progress }).catch(() => {});
     }, req.settings, req.limit || 0, req.since || null)
-      .then((result) => sendResponse({ ok: true, ...result }))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
+      .then((result) => { _running = false; _progress = null; sendResponse({ ok: true, ...result }); })
+      .catch((err) => { _running = false; _progress = null; sendResponse({ ok: false, error: err.message }); });
     return true;
+  }
+
+  if (req.type === "GET_STATUS") {
+    sendResponse({ running: _running, progress: _progress });
+    return;
+  }
+
+  if (req.type === "STOP_SYNC") {
+    _cancelled = true;
+    _running = false;
+    _progress = null;
+    sendResponse({ ok: true });
+    return;
   }
 });
 
 const SYNC_SERVER = "http://localhost:8765";
 const DEFAULTS = { concurrency: 1, chunkDelay: 2000, retryDelay: 5000 };
 let _running = false;
+let _cancelled = false;
+let _progress = null; // ポップアップが閉じても状態を保持
 
 function toISO(value) {
   if (!value) return null;
@@ -56,6 +79,7 @@ async function fetchConversationList(token, maxItems = 0, since = null) {
   const sinceTs = since ? new Date(since).getTime() : null;
 
   while (true) {
+    if (_cancelled) break;
     const url = new URL("/backend-api/conversations", location.origin);
     url.searchParams.set("offset", String(offset));
     url.searchParams.set("limit", String(pageSize));
@@ -182,6 +206,7 @@ async function fetchFullConversations(convList, token, onProgress, settings) {
   let completed = 0;
 
   for (let i = 0; i < convList.length; i += concurrency) {
+    if (_cancelled) break;
     const chunk = convList.slice(i, i + concurrency);
     await Promise.all(
       chunk.map(async (item, j) => {
@@ -214,13 +239,6 @@ async function smartSync(onProgress, settings, limit = 0, since = null) {
   const syncRes = await fetch(`${SYNC_SERVER}/sync_state`);
   if (!syncRes.ok) throw new Error(`同期サーバーに接続できません (${syncRes.status})`);
   const syncState = await syncRes.json();
-
-  // 最初の3件だけデバッグ出力
-  convList.slice(0, 3).forEach((item) => {
-    const itemUpdatedAt = toISO(item.update_time);
-    const stored = syncState[item.id];
-    console.log("[GPTSync] id:", item.id, "| stored:", stored, "| list:", itemUpdatedAt, "| raw update_time:", item.update_time);
-  });
 
   const needUpdate = convList.filter((item) => {
     const itemUpdatedAt = toISO(item.update_time);

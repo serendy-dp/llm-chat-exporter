@@ -196,6 +196,31 @@
       box-shadow: 0 0 10px rgba(0,255,136,0.2), inset 0 0 10px rgba(0,255,136,0.05);
     }
 
+    #btnStop {
+      display: none;
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 2px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+      text-align: left;
+      background: #2a0a0a;
+      border: 1px solid #ff446666;
+      color: #ff4466;
+      text-shadow: 0 0 6px rgba(255,68,102,0.4);
+      transition: all 0.15s;
+    }
+    #btnStop:hover {
+      background: #3a0d0d;
+      border-color: #ff4466;
+      box-shadow: 0 0 10px rgba(255,68,102,0.2), inset 0 0 10px rgba(255,68,102,0.05);
+    }
+    #btnStop.visible { display: block; }
+
     /* ボタンプレフィックス */
     .btn-prefix {
       color: #335577;
@@ -359,6 +384,7 @@
 
   <button class="btn" id="btnExport"><span class="btn-prefix">&gt;</span> Export</button>
   <button class="btn" id="btnSync"><span class="btn-prefix">&gt;</span> Sync DB</button>
+  <button id="btnStop"><span class="btn-prefix">&gt;</span> Stop</button>
 
   <button id="btnConfig">⚙ CONFIG</button>
 

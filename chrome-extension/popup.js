@@ -1,5 +1,6 @@
 const btnExport   = document.getElementById("btnExport");
 const btnSync     = document.getElementById("btnSync");
+const btnStop     = document.getElementById("btnStop");
 const btnConfig   = document.getElementById("btnConfig");
 const configPanel = document.getElementById("configPanel");
 const cfgConcurrency = document.getElementById("cfgConcurrency");
@@ -134,6 +135,22 @@ async function updateServiceIndicator() {
 
 updateServiceIndicator();
 
+// ポップアップ起動時に進行中の同期を復元
+async function restoreProgress() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (!tab?.id) return;
+  chrome.tabs.sendMessage(tab.id, { type: "GET_STATUS" }, (res) => {
+    if (chrome.runtime.lastError || !res?.running || !res?.progress) return;
+    const { current, total, title } = res.progress;
+    setButtons(true);
+    progressWrap.style.display = "block";
+    setProgress(total > 0 ? Math.round((current / total) * 100) : 0);
+    setStatus(`${current}/${total}  ${title || ""}`.slice(0, 60));
+  });
+}
+restoreProgress();
+
 function setStatus(msg, type = "") {
   statusEl.textContent = msg;
   statusEl.className = type;
@@ -147,6 +164,7 @@ function setProgress(pct) {
 function setButtons(disabled) {
   btnExport.disabled = disabled;
   btnSync.disabled   = disabled;
+  btnStop.classList.toggle("visible", disabled);
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
@@ -251,3 +269,13 @@ async function runSync() {
 
 btnExport.addEventListener("click", runExport);
 btnSync.addEventListener("click", runSync);
+
+btnStop.addEventListener("click", async () => {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (!tab?.id) return;
+  chrome.tabs.sendMessage(tab.id, { type: "STOP_SYNC" }, () => {});
+  setButtons(false);
+  setStatus("stopped", "error");
+  setTimeout(() => { progressWrap.style.display = "none"; progressBar.style.width = "0%"; }, 2000);
+});

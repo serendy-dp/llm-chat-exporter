@@ -142,8 +142,20 @@ def on_startup():
 @app.get("/sync_state")
 def sync_state():
     with get_db() as conn:
-        rows = conn.execute("SELECT uuid, updated_at FROM conversations").fetchall()
-    return {row["uuid"]: row["updated_at"] for row in rows}
+        # メッセージあり → last_fetched_at で比較（取得後にサービス側でtimestampが
+        #   更新されてもループしないよう last_fetched_at を基準にする）
+        # メッセージなし → NULL を返す（初回メッセージ取得の対象にする）
+        rows = conn.execute("""
+            SELECT c.uuid,
+                   CASE WHEN COUNT(m.uuid) > 0
+                        THEN COALESCE(c.last_fetched_at, c.updated_at)
+                        ELSE NULL
+                   END as ts
+            FROM conversations c
+            LEFT JOIN messages m ON c.uuid = m.conversation_uuid
+            GROUP BY c.uuid
+        """).fetchall()
+    return {row["uuid"]: row["ts"] for row in rows}
 
 
 class UpsertPayload(BaseModel):
