@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS messages (
     files               TEXT,   -- JSON (Claude files / ChatGPT multimodal parts)
     FOREIGN KEY (conversation_uuid) REFERENCES conversations(uuid)
 );
+
+CREATE INDEX IF NOT EXISTS idx_messages_conv    ON messages(conversation_uuid);
+CREATE INDEX IF NOT EXISTS idx_conv_source      ON conversations(source);
+CREATE INDEX IF NOT EXISTS idx_conv_updated     ON conversations(updated_at DESC);
 """
 
 # 新規追加カラム (既存DBへのALTER TABLE用)
