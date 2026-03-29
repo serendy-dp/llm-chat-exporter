@@ -25,6 +25,7 @@ const serviceIndicator = document.getElementById("serviceIndicator");
 let selectedFormat = "json";
 let rangeMode = "all"; // "all" | "latest" | "since"
 let _syncActive = false; // PROGRESS が最終ステータスを上書きするのを防ぐ
+let _ownSync    = false; // このポップアップ自身が開始したsyncかどうか
 
 // デフォルトの日付を今日から30日前に設定
 const d = new Date();
@@ -165,6 +166,7 @@ async function restoreProgress() {
   chrome.tabs.sendMessage(tab.id, { type: "GET_STATUS" }, (res) => {
     if (chrome.runtime.lastError || !res?.running || !res?.progress) return;
     const { current, total, title } = res.progress;
+    _syncActive = true; // PROGRESS メッセージを受け取れるようにする
     setButtons(true);
     progressWrap.style.display = "block";
     setProgress(total > 0 ? Math.round((current / total) * 100) : 0);
@@ -194,6 +196,14 @@ chrome.runtime.onMessage.addListener((msg) => {
     const pct = Math.round((msg.current / msg.total) * 100);
     setStatus(`${msg.current}/${msg.total}  ${msg.title || ""}`.slice(0, 60));
     setProgress(pct);
+  }
+  // ポップアップを再度開いた場合の完了通知 (_ownSync=false = 自分が開始していない)
+  if (msg.type === "SYNC_COMPLETE" && _syncActive && !_ownSync) {
+    _syncActive = false;
+    setProgress(100);
+    setStatus(`synced ${msg.updated} / ${msg.total}`, "done");
+    setButtons(false);
+    setTimeout(() => { progressWrap.style.display = "none"; progressBar.style.width = "0%"; }, 3000);
   }
 });
 
@@ -248,6 +258,7 @@ async function runSmartSync() {
 }
 
 async function runExport() {
+  _ownSync = true;
   _syncActive = true;
   setButtons(true);
   setProgress(0);
@@ -257,10 +268,12 @@ async function runExport() {
   try {
     const count = await fetchConversations(selectedFormat);
     _syncActive = false;
+    _ownSync = false;
     setProgress(100);
     setStatus(`exported ${count} conversations`, "done");
   } catch (e) {
     _syncActive = false;
+    _ownSync = false;
     setStatus(e.message, "error");
   } finally {
     setButtons(false);
@@ -272,6 +285,7 @@ async function runExport() {
 }
 
 async function runSync() {
+  _ownSync = true;
   _syncActive = true;
   setButtons(true);
   setProgress(0);
@@ -281,10 +295,12 @@ async function runSync() {
   try {
     const result = await runSmartSync();
     _syncActive = false;
+    _ownSync = false;
     setProgress(100);
     setStatus(`synced ${result.updated} / ${result.total}`, "done");
   } catch (e) {
     _syncActive = false;
+    _ownSync = false;
     setStatus(e.message, "error");
   } finally {
     setButtons(false);

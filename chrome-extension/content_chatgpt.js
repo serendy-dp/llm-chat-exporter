@@ -30,7 +30,7 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
       _progress = progress;
       chrome.runtime.sendMessage({ type: "PROGRESS", ...progress }).catch(() => {});
     }, req.settings, req.limit || 0, req.since || null)
-      .then((result) => { _running = false; _progress = null; sendResponse({ ok: true, ...result }); })
+      .then((result) => { _running = false; _progress = null; sendResponse({ ok: true, ...result }); chrome.runtime.sendMessage({ type: "SYNC_COMPLETE", ...result }).catch(() => {}); })
       .catch((err) => { _running = false; _progress = null; sendResponse({ ok: false, error: err.message }); });
     return true;
   }
