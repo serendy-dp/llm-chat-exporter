@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
   if (req.type === "SMART_SYNC") {
     smartSync((progress) => {
       chrome.runtime.sendMessage({ type: "PROGRESS", ...progress }).catch(() => {});
-    }, req.settings)
+    }, req.settings, req.limit || 0, req.since || null)
       .then((result) => sendResponse({ ok: true, ...result }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
@@ -206,9 +206,9 @@ async function fetchAllConversations(onProgress, limit = 0, since = null, settin
   return fetchFullConversations(convList, token, onProgress, settings);
 }
 
-async function smartSync(onProgress, settings) {
+async function smartSync(onProgress, settings, limit = 0, since = null) {
   const token = await getAccessToken();
-  const convList = await fetchConversationList(token);
+  const convList = await fetchConversationList(token, limit, since);
   if (convList.length === 0) return { total: 0, updated: 0 };
 
   const syncRes = await fetch(`${SYNC_SERVER}/sync_state`);

@@ -194,7 +194,7 @@ async function runSmartSync() {
       reject(new Error("timeout — F12 > Console でエラーを確認"));
     }, 600_000);
 
-    chrome.tabs.sendMessage(tabId, { type: "SMART_SYNC", settings: getSettings() }, (res) => {
+    chrome.tabs.sendMessage(tabId, { type: "SMART_SYNC", settings: getSettings(), ...getRangeParams() }, (res) => {
       clearTimeout(timer);
       if (chrome.runtime.lastError) {
         reject(new Error("content script と通信できません。ページをリロードしてください。"));

@@ -30,6 +30,9 @@ conversations.json
 *.pem
 *.key
 
+# ドキュメント・分析レポート（個人データを含む）
+docs/
+
 # Claude Code
 .claude/
 
