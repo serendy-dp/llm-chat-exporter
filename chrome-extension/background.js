@@ -23,6 +23,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         });
         if (res?.ok) {
           console.log(`[LatentSync] ${tab.url}: synced ${res.updated}/${res.total}`);
+          chrome.storage.local.set({ lastSyncResult: { updated: res.updated, total: res.total, ts: new Date().toISOString() } });
         }
       } catch {}
     }

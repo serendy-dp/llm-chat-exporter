@@ -158,21 +158,43 @@ async function updateServiceIndicator() {
 
 updateServiceIndicator();
 
-// ポップアップ起動時に進行中の同期を復元
+// ポップアップ起動時の状態復元
 async function restoreProgress() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const tab = tabs[0];
-  if (!tab?.id) return;
-  chrome.tabs.sendMessage(tab.id, { type: "GET_STATUS" }, (res) => {
-    if (chrome.runtime.lastError || !res?.running || !res?.progress) return;
-    const { current, total, title } = res.progress;
-    _syncActive = true; // PROGRESS メッセージを受け取れるようにする
-    setButtons(true);
-    progressWrap.style.display = "block";
-    setProgress(total > 0 ? Math.round((current / total) * 100) : 0);
-    setStatus(`${current}/${total}  ${title || ""}`.slice(0, 60));
+
+  // 同期中なら進捗を復元
+  if (tab?.id) {
+    chrome.tabs.sendMessage(tab.id, { type: "GET_STATUS" }, (res) => {
+      if (!chrome.runtime.lastError && res?.running && res?.progress) {
+        const { current, total, title } = res.progress;
+        _syncActive = true;
+        setButtons(true);
+        progressWrap.style.display = "block";
+        setProgress(total > 0 ? Math.round((current / total) * 100) : 0);
+        setStatus(`${current}/${total}  ${title || ""}`.slice(0, 60));
+        return; // 同期中なので最終結果は表示しない
+      }
+      // 同期中でなければ最終結果を表示
+      showLastSyncResult();
+    });
+  } else {
+    showLastSyncResult();
+  }
+}
+
+function showLastSyncResult() {
+  chrome.storage.local.get("lastSyncResult", ({ lastSyncResult: r }) => {
+    if (!r) return;
+    const time = new Date(r.ts).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+    setStatus(`synced ${r.updated} / ${r.total}  (${time})`, "done");
   });
 }
+
+function saveLastSyncResult(updated, total) {
+  chrome.storage.local.set({ lastSyncResult: { updated, total, ts: new Date().toISOString() } });
+}
+
 restoreProgress();
 
 function setStatus(msg, type = "") {
@@ -200,6 +222,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   // ポップアップを再度開いた場合の完了通知 (_ownSync=false = 自分が開始していない)
   if (msg.type === "SYNC_COMPLETE" && _syncActive && !_ownSync) {
     _syncActive = false;
+    saveLastSyncResult(msg.updated, msg.total);
     setProgress(100);
     setStatus(`synced ${msg.updated} / ${msg.total}`, "done");
     setButtons(false);
@@ -296,6 +319,7 @@ async function runSync() {
     const result = await runSmartSync();
     _syncActive = false;
     _ownSync = false;
+    saveLastSyncResult(result.updated, result.total);
     setProgress(100);
     setStatus(`synced ${result.updated} / ${result.total}`, "done");
   } catch (e) {
