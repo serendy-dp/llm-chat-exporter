@@ -22,7 +22,7 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
       return;
     }
     _running = true;
-    _cancelled = false;
+    _cancelToken = { cancelled: false };
     _progress = null;
     smartSync((progress) => {
       _progress = progress;
@@ -39,7 +39,7 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
   }
 
   if (req.type === "STOP_SYNC") {
-    _cancelled = true;
+    _cancelToken.cancelled = true;
     _running = false;
     _progress = null;
     sendResponse({ ok: true });
@@ -50,7 +50,7 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
 const SYNC_SERVER = "http://localhost:8765";
 const DEFAULTS = { concurrency: 5, chunkDelay: 0, retryDelay: 3000 };
 let _running = false;
-let _cancelled = false;
+let _cancelToken = { cancelled: false };
 let _progress = null;
 
 async function getOrgId() {
@@ -68,7 +68,7 @@ async function fetchConversationList(orgId, maxItems = 0, since = null) {
   const sinceTs = since ? new Date(since).getTime() : null;
 
   while (true) {
-    if (_cancelled) break;
+    if (_cancelToken.cancelled) break;
     const url = new URL(`/api/organizations/${orgId}/chat_conversations`, location.origin);
     url.searchParams.set("limit", String(pageSize));
     url.searchParams.set("offset", String(offset));
@@ -109,7 +109,7 @@ async function fetchFullConversations(orgId, convList, onProgress, settings) {
   let completed = 0;
 
   for (let i = 0; i < convList.length; i += concurrency) {
-    if (_cancelled) break;
+    if (_cancelToken.cancelled) break;
     const chunk = convList.slice(i, i + concurrency);
     const results = await Promise.all(
       chunk.map(async (conv) => {
@@ -119,7 +119,7 @@ async function fetchFullConversations(orgId, convList, onProgress, settings) {
           );
           if (res.status === 429) {
             console.log(`[ClaudeExporter] 429 rate limit — stopping`);
-            _cancelled = true;
+            _cancelToken.cancelled = true;
             completed++;
             onProgress({ current: completed, total: convList.length, title: conv.name || conv.uuid });
             return conv;

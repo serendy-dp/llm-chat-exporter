@@ -24,7 +24,7 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
       return;
     }
     _running = true;
-    _cancelled = false;
+    _cancelToken = { cancelled: false };
     _progress = null;
     smartSync((p) => {
       _progress = p;
@@ -41,7 +41,7 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
   }
 
   if (req.type === "STOP_SYNC") {
-    _cancelled = true;
+    _cancelToken.cancelled = true;
     _running = false;
     _progress = null;
     sendResponse({ ok: true });
@@ -52,7 +52,7 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
 const SYNC_SERVER = "http://localhost:8765";
 const DEFAULTS = { concurrency: 1, chunkDelay: 2500, retryDelay: 5000 };
 let _running = false;
-let _cancelled = false;
+let _cancelToken = { cancelled: false };
 let _progress = null;
 
 // ── ユーザーインデックス検出 ──────────────────────────────────
@@ -213,7 +213,7 @@ async function callBatchExecute(rpcid, payload, tokens, sourcePath) {
 
   if (res.status === 429) {
     console.log(`[GeminiExporter] 429 rate limit — stopping`);
-    _cancelled = true;
+    _cancelToken.cancelled = true;
   }
   if (!res.ok) throw new Error(`batchexecute ${rpcid} エラー (${res.status})`);
   const text = await res.text();
@@ -726,7 +726,7 @@ async function fetchFullConversations(convList, tokens, onProgress, settings) {
   let completed = 0;
 
   for (let i = 0; i < convList.length; i += concurrency) {
-    if (_cancelled) break;
+    if (_cancelToken.cancelled) break;
     const chunk = convList.slice(i, i + concurrency);
     const results = await Promise.all(
       chunk.map(async (conv) => {

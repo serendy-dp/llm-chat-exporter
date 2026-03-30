@@ -26,6 +26,20 @@ let selectedFormat = "json";
 let rangeMode = "all"; // "all" | "latest" | "since"
 let _syncActive = false; // PROGRESS が最終ステータスを上書きするのを防ぐ
 let _ownSync    = false; // このポップアップ自身が開始したsyncかどうか
+let _hideTimer  = null;  // 進捗バー非表示タイマー（重複防止用）
+
+function scheduleHide(ms) {
+  if (_hideTimer) clearTimeout(_hideTimer);
+  _hideTimer = setTimeout(() => {
+    progressWrap.style.display = "none";
+    progressBar.style.width = "0%";
+    _hideTimer = null;
+  }, ms);
+}
+
+function cancelHide() {
+  if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
+}
 
 // デフォルトの日付を今日から30日前に設定
 const d = new Date();
@@ -226,7 +240,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     setProgress(100);
     setStatus(`synced ${msg.updated} / ${msg.total}`, "done");
     setButtons(false);
-    setTimeout(() => { progressWrap.style.display = "none"; progressBar.style.width = "0%"; }, 3000);
+    scheduleHide(3000);
   }
 });
 
@@ -243,12 +257,7 @@ async function getActiveTabId() {
 async function fetchConversations(format) {
   const tabId = await getActiveTabId();
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("timeout — F12 > Console でエラーを確認"));
-    }, 600_000);
-
     chrome.tabs.sendMessage(tabId, { type: "FETCH_CONVERSATIONS", format, ...getRangeParams(), settings: getSettings() }, (res) => {
-      clearTimeout(timer);
       if (chrome.runtime.lastError) {
         reject(new Error("content script と通信できません。ページをリロードしてください。"));
       } else if (!res?.ok) {
@@ -263,12 +272,7 @@ async function fetchConversations(format) {
 async function runSmartSync() {
   const tabId = await getActiveTabId();
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("timeout — F12 > Console でエラーを確認"));
-    }, 600_000);
-
     chrome.tabs.sendMessage(tabId, { type: "SMART_SYNC", settings: getSettings(), ...getRangeParams() }, (res) => {
-      clearTimeout(timer);
       if (chrome.runtime.lastError) {
         reject(new Error("content script と通信できません。ページをリロードしてください。"));
       } else if (!res?.ok) {
@@ -281,6 +285,7 @@ async function runSmartSync() {
 }
 
 async function runExport() {
+  cancelHide();
   _ownSync = true;
   _syncActive = true;
   setButtons(true);
@@ -300,14 +305,12 @@ async function runExport() {
     setStatus(e.message, "error");
   } finally {
     setButtons(false);
-    setTimeout(() => {
-      progressWrap.style.display = "none";
-      progressBar.style.width = "0%";
-    }, 3000);
+    scheduleHide(3000);
   }
 }
 
 async function runSync() {
+  cancelHide();
   _ownSync = true;
   _syncActive = true;
   setButtons(true);
@@ -328,10 +331,7 @@ async function runSync() {
     setStatus(e.message, "error");
   } finally {
     setButtons(false);
-    setTimeout(() => {
-      progressWrap.style.display = "none";
-      progressBar.style.width = "0%";
-    }, 3000);
+    scheduleHide(3000);
   }
 }
 
@@ -343,7 +343,9 @@ btnStop.addEventListener("click", async () => {
   const tab = tabs[0];
   if (!tab?.id) return;
   chrome.tabs.sendMessage(tab.id, { type: "STOP_SYNC" }, () => {});
+  _syncActive = false;
+  _ownSync = false;
   setButtons(false);
   setStatus("stopped", "error");
-  setTimeout(() => { progressWrap.style.display = "none"; progressBar.style.width = "0%"; }, 2000);
+  scheduleHide(2000);
 });
